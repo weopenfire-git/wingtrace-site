@@ -1,0 +1,16 @@
+# 本地一条命令起站点：docker compose up -d --build
+# 然后浏览器打开 http://localhost:8080
+#
+# 若基础镜像拉取受限，可复用本机已有的 nginx 镜像：
+#   NGINX_IMAGE=docker.m.daocloud.io/library/nginx:latest docker compose up -d --build
+services:
+  wingtrace:
+    build:
+      context: .
+      args:
+        NGINX_IMAGE: ${NGINX_IMAGE:-nginx:1.27-alpine}
+    image: wingtrace-flyer-community:1.0.0
+    container_name: wingtrace
+    ports:
+      - "8080:80"
+    restart: unless-stopped
