@@ -1,0 +1,6 @@
+.git
+.gitignore
+*.zip
+*.log
+README.md
+nginx.https.conf.example
