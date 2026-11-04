@@ -1,0 +1,4 @@
+# 站点产物与部署脚本必须按字节原样保留。
+# index.html 的 SHA256 是 deploy.sh 的产物校验基准，任何换行符转换都会让它失配；
+# deploy.sh 若被转成 CRLF，Linux 上会报 $'\r': command not found。
+* -text
