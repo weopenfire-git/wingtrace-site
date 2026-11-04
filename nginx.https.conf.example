@@ -1,0 +1,50 @@
+# 上云后再用：HTTPS 站点配置示例（放到服务器的 nginx.conf 里替换/追加）
+#
+# 用法（腾讯云服务器上，证书用腾讯云免费 SSL 证书签发后下载 Nginx 版）：
+#   1. 把证书文件放到服务器，例如 /etc/nginx/certs/wingtrace.crt 与 wingtrace.key
+#   2. 把本文件内容合并进站点配置，替换 server_name 与证书路径
+#   3. docker compose restart（或 nginx -s reload）
+#
+# 证书也可用 certbot 自动签发续期；两种方式任选其一。
+
+server {
+    listen 80;
+    server_name example.com www.example.com;
+    # 全站跳转 HTTPS
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen              443 ssl;
+    http2               on;
+    server_name         example.com www.example.com;
+
+    ssl_certificate     /etc/nginx/certs/wingtrace.crt;
+    ssl_certificate_key /etc/nginx/certs/wingtrace.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    root  /usr/share/nginx/html;
+    index index.html;
+
+    charset       utf-8;
+    server_tokens off;
+
+    gzip              on;
+    gzip_vary         on;
+    gzip_min_length   1024;
+    gzip_comp_level   5;
+    gzip_types        text/html text/css application/javascript image/svg+xml;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options        "SAMEORIGIN" always;
+    add_header Referrer-Policy        "no-referrer-when-downgrade" always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'" always;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
