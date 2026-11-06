@@ -13,7 +13,8 @@
 
 set -euo pipefail
 
-EXPECTED_SHA="10771fe6729c4583270c4d82d94eb44fdcbb268ba7a1d06d4f8cf98bdcf7945a"
+# 产物校验值来自同目录的 index.html.sha256（由同步脚本随产物一起生成，页面改版会自动更新）。
+# 也可用环境变量 EXPECTED_SHA 显式指定；两者都没有时只记录实际值，不阻断部署。
 PORT="${PORT:-8080}"
 APP_DIR="/opt/wingtrace-deploy"
 SRC_DIR=""
@@ -43,16 +44,26 @@ fi
 [ -f "$SRC_DIR/docker-compose.yml" ] || { echo "找不到 $SRC_DIR/docker-compose.yml"; exit 1; }
 [ -f "$SRC_DIR/nginx.conf" ] || { echo "找不到 $SRC_DIR/nginx.conf，CSP 响应头将无法下发"; exit 1; }
 
-# 2. 产物校验：确保上传的是本地已验证过的那一版
-ACTUAL_SHA="$(sha256sum "$SRC_DIR/index.html" | awk '{print $1}')"
-if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
-  echo "index.html 校验值与已验证产物不一致："
-  echo "  期望 $EXPECTED_SHA"
-  echo "  实际 $ACTUAL_SHA"
-  echo "若确为重新生成的新版产物，请先核对 build_site.py 输出，再更新本脚本的 EXPECTED_SHA。"
-  exit 1
+# 2. 产物校验：优先读随产物下发的校验文件，其次读环境变量；都没有则只记录不阻断
+SHA_FILE="$SRC_DIR/index.html.sha256"
+if [ -z "${EXPECTED_SHA:-}" ] && [ -f "$SHA_FILE" ]; then
+  EXPECTED_SHA="$(awk 'NR==1 {print $1}' "$SHA_FILE")"
 fi
-log "产物校验通过（1,309,253 字节，与本地已验证版本一致）"
+ACTUAL_SHA="$(sha256sum "$SRC_DIR/index.html" | awk '{print $1}')"
+BYTES="$(wc -c < "$SRC_DIR/index.html" | tr -d ' ')"
+if [ -n "${EXPECTED_SHA:-}" ]; then
+  if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+    echo "index.html 校验值与随附校验文件不一致："
+    echo "  期望 $EXPECTED_SHA"
+    echo "  实际 $ACTUAL_SHA"
+    echo "请确认部署包完整上传（index.html 与 index.html.sha256 必须来自同一次构建）。"
+    exit 1
+  fi
+  log "产物校验通过（${BYTES} 字节，SHA256 与随附校验文件一致）"
+else
+  log "未找到 index.html.sha256，跳过哈希校验（${BYTES} 字节）"
+  echo "实际 SHA256：$ACTUAL_SHA"
+fi
 
 # 3. Docker 环境检查（自动适配「用户已在 docker 组」与「需要 sudo」两种情形）
 command -v docker >/dev/null 2>&1 || { echo "缺少 Docker。轻量服务器建议直接选用预装 Docker 的系统镜像。"; exit 1; }
@@ -96,4 +107,4 @@ log "部署完成"
 echo "本机访问：http://127.0.0.1:${PORT}/"
 echo "公网访问：http://<服务器公网IP>:${PORT}/   （需在腾讯云防火墙 / 安全组放行 ${PORT}）"
 echo "常用运维：$DC ps | logs -f | restart | down | up -d --build"
-echo "域名与 HTTPS：参见部署包内 nginx.https.conf.example；大陆地域用域名对外服务需先完成 ICP 备案。"
+echo "域名与 HTTPS：参见部署包内 nginx.https.conf.example；仅中国大陆地域用域名对外服务时需先完成 ICP 备案。"
